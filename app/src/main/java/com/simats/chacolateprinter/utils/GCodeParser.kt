@@ -59,6 +59,7 @@ object GCodeParser {
                 val command = commandParts[0].uppercase()
                 var x: Float? = null; var y: Float? = null; var z: Float? = null
                 var e: Float? = null; var f: Float? = null; var p: Long? = null
+                var s: Float? = null
 
                 commandParts.forEach {
                     if (it.length > 1) {
@@ -70,12 +71,16 @@ object GCodeParser {
                                 'E' -> e = it.substring(1).toFloatOrNull()
                                 'F' -> f = it.substring(1).toFloatOrNull()
                                 'P' -> p = it.substring(1).toLongOrNull()
+                                'S' -> s = it.substring(1).toFloatOrNull()
                             }
                         } catch (ex: Exception) { }
                     }
                 }
                 
-                if (command == "M3") extruding = true
+                if (command == "M3") {
+                    // M3 S540 is Down (Extruding), M3 S10 is Up (Not Extruding)
+                    extruding = if (s != null) s!! > 100f else true
+                }
                 if (command == "M5") extruding = false
                 
                 if (command == "G0" || command == "G1") {
@@ -123,7 +128,11 @@ object GCodeParser {
             val commandParts = parts.split("\\s+".toRegex())
             val command = commandParts[0].uppercase()
             
-            if (command == "M3") extruding = true
+            if (command == "M3") {
+                var s: Float? = null
+                commandParts.forEach { if (it.startsWith("S")) s = it.substring(1).toFloatOrNull() }
+                extruding = if (s != null) s!! > 100f else true
+            }
             if (command == "M5") extruding = false
             
             if (command == "G0" || command == "G1") {

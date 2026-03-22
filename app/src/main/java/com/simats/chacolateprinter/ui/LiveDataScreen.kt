@@ -1,10 +1,8 @@
 package com.simats.chacolateprinter.ui
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -17,20 +15,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.simats.chacolateprinter.utils.GCodeParser
-import com.simats.chacolateprinter.utils.GCodeCommand
-import kotlin.math.cos
-import kotlin.math.sin
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,13 +41,6 @@ fun LiveDataScreen(
     bedDepth: Float = 200f,
     colors: List<Color> = emptyList()
 ) {
-    // State for camera/view
-    var rotationXAxis by remember { mutableFloatStateOf(-30f) }
-    var rotationYAxis by remember { mutableFloatStateOf(45f) }
-    var zoom by remember { mutableFloatStateOf(0.8f) }
-    var panX by remember { mutableFloatStateOf(0f) }
-    var panY by remember { mutableFloatStateOf(0f) }
-
     // Parse G-code for live tracking
     val commands = remember(gCodeString) { 
         if (gCodeString.isBlank()) emptyList() else GCodeParser.parse(gCodeString) 
@@ -75,10 +58,11 @@ fun LiveDataScreen(
     
     val currentCmd = if (commands.isNotEmpty()) commands[currentCommandIndex] else null
     
-    // Positions from G-code if hardware reporting is lagging
+    // Positions from G-code if hardware reporting is lagging or for simulation
     val lastGCodePos = remember(currentCommandIndex, commands) {
         var x = 0f; var y = 0f; var z = 0f
         if (commands.isNotEmpty()) {
+            // Find the most recent X, Y, Z in the commands up to currentCommandIndex
             for (i in 0..currentCommandIndex) {
                 val c = commands[i]
                 if (c.x != null) x = c.x
@@ -89,9 +73,27 @@ fun LiveDataScreen(
         Triple(x, y, z)
     }
 
-    val xPosValue = "%.2f".format(currentX ?: lastGCodePos.first)
-    val yPosValue = "%.2f".format(currentY ?: lastGCodePos.second)
-    val zPosValue = "%.2f".format(currentZ ?: lastGCodePos.third)
+    // Use currentX/Y/Z if provided (from real hardware), otherwise fallback to G-code calculated position
+    // If it's a simulation, we should prioritize the G-code position to see movement
+    val isSimulation = !isPrinting
+    
+    val xPosValue = if (isSimulation || currentX == null || currentX == 0f) {
+        "%.2f".format(lastGCodePos.first)
+    } else {
+        "%.2f".format(currentX)
+    }
+
+    val yPosValue = if (isSimulation || currentY == null || currentY == 0f) {
+        "%.2f".format(lastGCodePos.second)
+    } else {
+        "%.2f".format(currentY)
+    }
+
+    val zPosValue = if (isSimulation || currentZ == null || currentZ == 0f) {
+        "%.2f".format(lastGCodePos.third)
+    } else {
+        "%.2f".format(currentZ)
+    }
     
     // Detect Multi-Color mode
     val isMultiColor = remember(commands) { commands.any { it.processNum > 1 } }
@@ -165,77 +167,6 @@ fun LiveDataScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Spacer(modifier = Modifier.height(8.dp))
-
-            // 3D LIVE VIEW CARD
-            LiveDataCard {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(300.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.Black.copy(alpha = 0.5f))
-                        .pointerInput(Unit) {
-                            detectTransformGestures { _, pan, zoomChange, _ ->
-                                if (zoomChange == 1f) {
-                                    rotationYAxis += pan.x * 0.4f
-                                    rotationXAxis -= pan.y * 0.4f
-                                } else {
-                                    zoom = (zoom * zoomChange).coerceIn(0.1f, 5.0f)
-                                    panX += pan.x
-                                    panY += pan.y
-                                }
-                            }
-                        }
-                ) {
-                    val rotYRad = Math.toRadians(rotationYAxis.toDouble()).toFloat()
-                    val rotXRad = Math.toRadians(rotationXAxis.toDouble()).toFloat()
-
-                    Canvas(modifier = Modifier.fillMaxSize()) {
-                        val (w, h) = size.width to size.height
-                        val center = Offset(w / 2 + panX, h / 2 + panY)
-                        val maxBedDim = kotlin.math.max(bedWidth, bedDepth).coerceAtLeast(10f)
-                        val minScreenDim = kotlin.math.min(w, h)
-                        val scale = (minScreenDim / maxBedDim) * 0.7f * zoom
-
-                        // Draw Grid
-                        drawLiveGrid(this, center, rotYRad, rotXRad, scale, bedWidth, bedDepth)
-
-                        // Draw Path (Simulation style)
-                        if (commands.isNotEmpty() && currentCommandIndex > 0) {
-                            drawLive3DPath(this, commands, currentCommandIndex, center, rotYRad, rotXRad, scale, colors)
-                        }
-
-                        // Nozzle Indicator
-                        val lastX = currentX ?: lastGCodePos.first
-                        val lastY = currentY ?: lastGCodePos.second
-                        val lastZ = currentZ ?: lastGCodePos.third
-                        val projected = projectLive(lastX, lastY, lastZ, scale, center, rotYRad, rotXRad)
-                        drawCircle(Color.Red, radius = 5.dp.toPx(), center = projected)
-                        drawCircle(Color.White, radius = 2.dp.toPx(), center = projected)
-                    }
-                    
-                    Text(
-                        "3D LIVE VIEW",
-                        modifier = Modifier.padding(12.dp).align(Alignment.TopStart),
-                        color = Color.Gray,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    
-                    IconButton(
-                        onClick = {
-                            rotationXAxis = -30f
-                            rotationYAxis = 45f
-                            zoom = 0.8f
-                            panX = 0f
-                            panY = 0f
-                        },
-                        modifier = Modifier.align(Alignment.TopEnd).padding(4.dp)
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Reset", tint = Color.White.copy(alpha = 0.5f), modifier = Modifier.size(16.dp))
-                    }
-                }
-            }
 
             // Control Panel
             if (isPrinting || isPaused) {
@@ -358,88 +289,6 @@ fun LiveDataScreen(
     }
 }
 
-private fun drawLiveGrid(scope: DrawScope, center: Offset, rotY: Float, rotX: Float, scale: Float, width: Float, depth: Float) {
-    scope.run {
-        val step = 20f
-        val color = Color.White.copy(alpha = 0.15f)
-        val halfW = width / 2f
-        val halfD = depth / 2f
-        for (i in -(depth / (2 * step)).toInt()..(depth / (2 * step)).toInt()) {
-            val z = i * step
-            val p1 = projectLive(-halfW, 0f, z, scale, center, rotY, rotX)
-            val p2 = projectLive(halfW, 0f, z, scale, center, rotY, rotX)
-            drawLine(color, p1, p2, 0.5.dp.toPx())
-        }
-        for (i in -(width / (2 * step)).toInt()..(width / (2 * step)).toInt()) {
-            val x = i * step
-            val p1 = projectLive(x, 0f, -halfD, scale, center, rotY, rotX)
-            val p2 = projectLive(x, 0f, halfD, scale, center, rotY, rotX)
-            drawLine(color, p1, p2, 0.5.dp.toPx())
-        }
-    }
-}
-
-private fun drawLive3DPath(
-    scope: DrawScope,
-    commands: List<GCodeCommand>,
-    count: Int,
-    center: Offset,
-    rotY: Float,
-    rotX: Float,
-    scale: Float,
-    colors: List<Color>
-) {
-    scope.run {
-        val cosY = cos(rotY); val sinY = sin(rotY)
-        val cosX = cos(rotX); val sinX = sin(rotX)
-        
-        var lastX = 0f; var lastY = 0f; var lastZ = 0f
-        var started = false
-        var currentLX = 0f; var currentLY = 0f
-
-        for (i in 0 until count) {
-            val cmd = commands[i]
-            val nx = cmd.x ?: lastX
-            val ny = cmd.y ?: lastY
-            val nz = cmd.z ?: lastZ
-            
-            val rX1 = nx * cosY - nz * sinY
-            val rZ1 = nx * sinY + nz * cosY
-            val rY2 = ny * cosX - rZ1 * sinX
-            val px = center.x + rX1 * scale
-            val py = center.y - rY2 * scale
-            
-            if (cmd.isExtruding) {
-                if (started) {
-                    val color = if (colors.isNotEmpty()) {
-                        colors.getOrElse(cmd.processNum - 1) { Color(0xFFFFD700) }
-                    } else Color(0xFFFFD700)
-
-                    drawLine(
-                        color = color,
-                        start = Offset(currentLX, currentLY),
-                        end = Offset(px, py),
-                        strokeWidth = 1.dp.toPx(),
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-                }
-                started = true
-            } else {
-                started = false
-            }
-            lastX = nx; lastY = ny; lastZ = nz
-            currentLX = px; currentLY = py
-        }
-    }
-}
-
-private fun projectLive(x: Float, y: Float, z: Float, scale: Float, center: Offset, rotY: Float, rotX: Float): Offset {
-    val rX1 = x * cos(rotY) - z * sin(rotY)
-    val rZ1 = x * sin(rotY) + z * cos(rotY)
-    val rY2 = y * cos(rotX) - rZ1 * sin(rotX)
-    return Offset(center.x + rX1 * scale, center.y - rY2 * scale)
-}
-
 @Composable
 fun LiveDataCard(
     modifier: Modifier = Modifier,
@@ -460,8 +309,7 @@ fun CoordinateLine(label: String, value: String, color: Color) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+        verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = color, fontWeight = FontWeight.Bold, fontSize = 14.sp)
         Row(verticalAlignment = Alignment.Bottom) {
             Text(value, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)

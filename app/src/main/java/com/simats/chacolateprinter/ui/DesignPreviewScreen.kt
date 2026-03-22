@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.InputStream
+import kotlin.math.cos
+import kotlin.math.sin
 
 @Composable
 fun DesignPreviewScreen(
@@ -69,7 +71,6 @@ fun DesignPreviewScreen(
             .background(brush = gradientBrush)
             .padding(16.dp)
     ) {
-        // ... (Top Bar remains same) ...
         // Top Bar
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -87,7 +88,7 @@ fun DesignPreviewScreen(
             Spacer(modifier = Modifier.width(12.dp))
             Column {
                 Text(
-                    text = "Select Design", // Keeping consistent with previous screen per image
+                    text = "Select Design",
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 20.sp
@@ -169,14 +170,14 @@ fun DesignPreviewScreen(
                 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.Check, // Or a custom checkmark
+                        imageVector = Icons.Default.Check,
                         contentDescription = "Ready",
                         tint = Color(0xFFFFC107),
-                        modifier = Modifier.size(16.dp).offset(x = 4.dp) // align with document icon center
+                        modifier = Modifier.size(16.dp).offset(x = 4.dp)
                     )
-                    Spacer(modifier = Modifier.width(20.dp)) // align with text above
+                    Spacer(modifier = Modifier.width(20.dp))
                     Text(
-                        text = "Path data ready for G-code generation (35 points)",
+                        text = "Path data ready for G-code generation",
                         color = Color(0xFFFFC107),
                         fontSize = 12.sp
                     )
@@ -191,7 +192,6 @@ fun DesignPreviewScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // "Choose Different Design" Button
             OutlinedButton(
                 onClick = onBackClick,
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
@@ -209,7 +209,6 @@ fun DesignPreviewScreen(
                 )
             }
             
-            // "Proceed to Parameters" Button
             Button(
                 onClick = onProceedClick,
                 colors = ButtonDefaults.buttonColors(
@@ -243,32 +242,21 @@ fun DesignPreviewScreen(
 
 @Composable
 fun PreviewShape(name: String, size: androidx.compose.ui.unit.Dp) {
-    // Reusing the CustomShape logic or standard icons
-    // We need to import Icons from Material if we want standard ones
-    // Or just use Canvas for everything for consistency
-    
-    // For now, let's reuse CustomShape but we need to update SelectDesignScreen 
-    // to expose the standard icons or just draw everything manually here.
-    // Given the constraints, let's check name and draw relevant standard shape or custom shape.
-    
     Canvas(modifier = Modifier.size(size)) {
         val path = Path()
         val w = this.size.width
         val h = this.size.height
         
-        val color = Color(0xFFFFAB00) // Filled Gold
+        val color = Color(0xFFFFAB00) 
         
         when (name) {
             "Heart" -> {
-                // Approximate Heart Shape
                 path.moveTo(w * 0.5f, h * 0.85f)
                 path.cubicTo(w*0.1f, h*0.5f, w*0.1f, h*0.1f, w*0.5f, h*0.3f)
                 path.cubicTo(w*0.9f, h*0.1f, w*0.9f, h*0.5f, w*0.5f, h*0.85f)
                 path.close()
-                drawPath(path, color)
             }
             "Star" -> {
-                // Approximate Star Shape
                  path.moveTo(w * 0.5f, h * 0.05f)
                  path.lineTo(w * 0.65f, h * 0.35f)
                  path.lineTo(w * 1.0f, h * 0.35f)
@@ -280,33 +268,113 @@ fun PreviewShape(name: String, size: androidx.compose.ui.unit.Dp) {
                  path.lineTo(w * 0.0f, h * 0.35f)
                  path.lineTo(w * 0.35f, h * 0.35f)
                  path.close()
-                 drawPath(path, color)
             }
             "Circle" -> {
                 drawCircle(color, radius = w/2)
+                return@Canvas
             }
             "Square" -> {
                 drawRect(color)
+                return@Canvas
             }
             "Parallelogram" -> {
-                path.moveTo(w * 0.2f, h * 0.8f) // Bottom Left
-                path.lineTo(w * 0.8f, h * 0.8f) // Bottom Right
-                path.lineTo(w * 0.9f, h * 0.2f) // Top Right (slanted)
-                path.lineTo(w * 0.3f, h * 0.2f) // Top Left
+                path.moveTo(w * 0.2f, h * 0.8f)
+                path.lineTo(w * 0.4f, h * 0.2f)
+                path.lineTo(w * 0.8f, h * 0.2f)
+                path.lineTo(w * 0.6f, h * 0.8f)
                 path.close()
-                drawPath(path, color)
             }
             "Triangle" -> {
-                path.moveTo(w * 0.5f, h * 0.1f) // Top Center
-                path.lineTo(w * 0.9f, h * 0.9f) // Bottom Right
-                path.lineTo(w * 0.1f, h * 0.9f) // Bottom Left
+                path.moveTo(w / 2, h * 0.2f)
+                path.lineTo(w * 0.8f, h * 0.8f)
+                path.lineTo(w * 0.2f, h * 0.8f)
                 path.close()
-                drawPath(path, color)
             }
-             else -> {
-                // Fallback Circle
-                 drawCircle(color, radius = w/2)
+            "Hexagon" -> {
+                for (i in 0 until 6) {
+                    val angle = Math.toRadians(60.0 * i)
+                    val x = (w/2 + (w/2.5 * cos(angle))).toFloat()
+                    val y = (h/2 + (h/2.5 * sin(angle))).toFloat()
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                path.close()
+            }
+            "Pentagon" -> {
+                for (i in 0 until 5) {
+                    val angle = Math.toRadians(72.0 * i - 90.0)
+                    val x = (w/2 + (w/2.5 * cos(angle))).toFloat()
+                    val y = (h/2 + (h/2.5 * sin(angle))).toFloat()
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                path.close()
+            }
+            "Diamond" -> {
+                path.moveTo(w/2, h * 0.1f)
+                path.lineTo(w * 0.9f, h/2)
+                path.lineTo(w/2, h * 0.9f)
+                path.lineTo(w * 0.1f, h/2)
+                path.close()
+            }
+            "Moon" -> {
+                for (i in -90..90 step 5) {
+                    val angle = Math.toRadians(i.toDouble())
+                    val x = (w/2 + (w/2.5 * cos(angle))).toFloat()
+                    val y = (h/2 + (h/2.5 * sin(angle))).toFloat()
+                    if (i == -90) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                for (i in 90 downTo -90 step 5) {
+                    val angle = Math.toRadians(i.toDouble())
+                    val x = (w * 0.65f + (w * 0.3 * cos(angle))).toFloat()
+                    val y = (h/2 + (h/2.5 * sin(angle))).toFloat()
+                    path.lineTo(x, y)
+                }
+                path.close()
+            }
+            "Cat" -> {
+                path.moveTo(w * 0.3f, h * 0.3f)
+                path.lineTo(w * 0.4f, h * 0.4f)
+                path.lineTo(w * 0.6f, h * 0.4f)
+                path.lineTo(w * 0.7f, h * 0.3f)
+                path.lineTo(w * 0.8f, h * 0.5f)
+                path.lineTo(w * 0.7f, h * 0.8f)
+                path.lineTo(w * 0.3f, h * 0.8f)
+                path.lineTo(w * 0.2f, h * 0.5f)
+                path.close()
+            }
+            "Bird" -> {
+                path.moveTo(w * 0.2f, h * 0.5f)
+                path.lineTo(w * 0.4f, h * 0.4f)
+                path.lineTo(w * 0.5f, h * 0.5f)
+                path.lineTo(w * 0.6f, h * 0.4f)
+                path.lineTo(w * 0.8f, h * 0.5f)
+                path.lineTo(w * 0.5f, h * 0.6f)
+                path.close()
+            }
+            "Butterfly" -> {
+                path.moveTo(w * 0.5f, h * 0.5f)
+                path.lineTo(w * 0.7f, h * 0.2f)
+                path.lineTo(w * 0.9f, h * 0.5f)
+                path.lineTo(w * 0.7f, h * 0.8f)
+                path.lineTo(w * 0.5f, h * 0.6f)
+                path.lineTo(w * 0.3f, h * 0.8f)
+                path.lineTo(w * 0.1f, h * 0.5f)
+                path.lineTo(w * 0.3f, h * 0.2f)
+                path.close()
+            }
+            "Fish" -> {
+                path.moveTo(w * 0.1f, h * 0.5f)
+                path.lineTo(w * 0.3f, h * 0.4f)
+                path.lineTo(w * 0.6f, h * 0.3f)
+                path.lineTo(w * 0.9f, h * 0.5f)
+                path.lineTo(w * 0.6f, h * 0.7f)
+                path.lineTo(w * 0.3f, h * 0.6f)
+                path.close()
+            }
+            else -> {
+                drawCircle(color, radius = w/2)
+                return@Canvas
             }
         }
+        drawPath(path, color)
     }
 }

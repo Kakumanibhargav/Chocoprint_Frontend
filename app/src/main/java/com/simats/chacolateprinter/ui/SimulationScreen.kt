@@ -49,25 +49,29 @@ fun SimulationScreen(
     var panX by remember { mutableFloatStateOf(0f) }
     var panY by remember { mutableFloatStateOf(0f) }
     var isSolidView by remember { mutableStateOf(false) }
-    var showStatsDialog by remember { mutableStateOf(false) }
 
-    // Use a more robust parser that correctly handles Tool ON/OFF states
+    // Enhanced parser to handle A-axis and M3 S values for visual feedback
     val fullPath = remember(gCodeString) { 
         val points = mutableListOf<Point3D>()
         var cx = 0f; var cy = 0f; var cz = 0f
         var extruding = false
+        var lastA = 0f
         
         gCodeString.lineSequence().forEach { line ->
-            val t = line.trim()
+            val t = line.trim().split(";")[0].trim() // Remove comments
+            if (t.isEmpty()) return@forEach
+            
             if (t.startsWith("M3")) {
-                extruding = true
+                var sVal: Float? = null
+                t.split("\\s+".toRegex()).forEach { if (it.startsWith("S")) sVal = it.substring(1).toFloatOrNull() }
+                extruding = if (sVal != null) sVal!! > 100f else true
             } else if (t.startsWith("M5")) {
                 extruding = false
-            } else if (t.startsWith("G0") || t.startsWith("G1") || t.startsWith("G2") || t.startsWith("G3")) {
+            } else if (t.startsWith("G0") || t.startsWith("G1")) {
                 var nx = cx; var ny = cy; var nz = cz
                 var hasCoord = false
-                var hasE = false
-                var eVal = 0f
+                var hasA = false
+                var aVal = lastA
                 
                 t.split("\\s+".toRegex()).forEach { part ->
                     if (part.length < 2) return@forEach
@@ -76,15 +80,17 @@ fun SimulationScreen(
                         'X' -> { nx = value; hasCoord = true }
                         'Y' -> { ny = value; hasCoord = true }
                         'Z' -> { nz = value; hasCoord = true }
-                        'E' -> { eVal = value; hasE = true }
+                        'A' -> { aVal = value; hasA = true }
                     }
                 }
                 
                 val isG1 = t.startsWith("G1")
-                val isMovingExtruding = isG1 && (extruding || (hasE && eVal > 0.0001f))
+                // Extruding if M3 is active OR A-axis value increased
+                val isMovingExtruding = isG1 && (extruding || (hasA && aVal > lastA + 0.0001f))
                 
                 cx = nx; cy = ny; cz = nz
-                // Map to 3D space: X=X, Y=Z (Vertical), Z=Y (Depth)
+                if (hasA) lastA = aVal
+                
                 if (hasCoord) points.add(Point3D(cx, cz, cy, isMovingExtruding))
             }
         }
@@ -92,23 +98,42 @@ fun SimulationScreen(
     }
 
     val currentLayer = (progress * maxLayers).toInt().coerceAtLeast(1)
-    val printStats = remember(gCodeString) { GCodeParser.calculateStats(gCodeString) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("3D Simulation", color = Color.White, fontWeight = FontWeight.Bold) },
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxHeight()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ViewInAr,
+                            contentDescription = null,
+                            tint = Color(0xFFFFC107),
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "3D Simulation",
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White
+                        )
                     }
                 },
                 actions = {
                     IconButton(onClick = onLiveDataClick) {
                         Icon(Icons.Default.ShowChart, contentDescription = "Live Data", tint = Color(0xFFFFC107))
-                    }
-                    IconButton(onClick = { showStatsDialog = true }) {
-                        Icon(Icons.Default.Tune, contentDescription = "Print Info", tint = Color.White)
                     }
                     IconButton(onClick = {
                         rotationXAxis = -30f; rotationYAxis = 45f; zoom = 1.0f; panX = 0f; panY = 0f
@@ -116,10 +141,17 @@ fun SimulationScreen(
                         Icon(Icons.Default.Replay, contentDescription = "Reset Camera", tint = Color.White)
                     }
                     IconButton(onClick = { isSolidView = !isSolidView }) {
-                        Icon(if (isSolidView) Icons.Default.ViewInAr else Icons.Default.Fullscreen, contentDescription = null, tint = if (isSolidView) Color(0xFFFFC107) else Color.White)
+                        Icon(
+                            if (isSolidView) Icons.Default.ViewInAr else Icons.Default.Fullscreen,
+                            contentDescription = "Toggle View Mode",
+                            tint = if (isSolidView) Color(0xFFFFC107) else Color.White
+                        )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF1E1E1E).copy(alpha = 0.8f))
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color(0xFF1E1E1E).copy(alpha = 0.9f)
+                ),
+                modifier = Modifier.height(64.dp)
             )
         },
         containerColor = Color.Black
@@ -159,8 +191,8 @@ fun SimulationScreen(
                 if (pointsToDrawCount > 0) {
                     val p = fullPath[pointsToDrawCount - 1]
                     val proj = project(p.x, p.y, p.z, scale, center, rotYRad, rotXRad)
-                    drawCircle(Color.Red, radius = 6.dp.toPx(), center = proj)
-                    drawCircle(Color.White, radius = 3.dp.toPx(), center = proj)
+                    drawCircle(Color.White, radius = 8.dp.toPx(), center = proj, alpha = 0.5f)
+                    drawCircle(Color(0xFFFFC107), radius = 4.dp.toPx(), center = proj)
                 }
             }
 
@@ -207,22 +239,6 @@ fun SimulationScreen(
                 }
             }
         }
-
-        if (showStatsDialog && printStats != null) {
-            AlertDialog(
-                onDismissRequest = { showStatsDialog = false },
-                containerColor = Color(0xFF1E1E1E),
-                title = { Text("Print Statistics", color = Color.White) },
-                text = {
-                    Column {
-                        DetailRow("Est. Print Time", formatTime(printStats.timeSeconds))
-                        DetailRow("Material Length", String.format("%.2f m", printStats.materialLengthMm / 1000f))
-                        DetailRow("Est. Weight", String.format("%.1f g", printStats.materialWeightGrams))
-                    }
-                },
-                confirmButton = { Button(onClick = { showStatsDialog = false }) { Text("Close") } }
-            )
-        }
     }
 }
 
@@ -234,11 +250,12 @@ private fun DrawScope.drawPath3D(points: List<Point3D>, center: Offset, rotY: Fl
         val p = points[i]
         val proj = project(p.x, p.y, p.z, scale, center, rotY, rotX)
         if (p.isExtruding) {
+            // Visible simulation color: Chocolate Brown (Solid) or Amber/Gold (Wireframe)
             drawLine(
-                color = if (isSolid) Color(0xFF5D4037) else Color(0xFFFFD700),
+                color = if (isSolid) Color(0xFF4E342E) else Color(0xFFFFC107),
                 start = lastProj,
                 end = proj,
-                strokeWidth = if (isSolid) 4.dp.toPx() else 1.5.dp.toPx(),
+                strokeWidth = if (isSolid) 5.dp.toPx() else 2.dp.toPx(),
                 cap = androidx.compose.ui.graphics.StrokeCap.Round
             )
         }
@@ -257,22 +274,17 @@ private fun DrawScope.drawGrid(center: Offset, rotY: Float, rotX: Float, scale: 
     val step = 20f; val halfW = width / 2f; val halfD = depth / 2f
     for (i in -(depth / (2 * step)).toInt()..(depth / (2 * step)).toInt()) {
         val z = i * step
-        drawLine(Color.White.copy(0.2f), project(-halfW, 0f, z, scale, center, rotY, rotX), project(halfW, 0f, z, scale, center, rotY, rotX), 1.dp.toPx())
+        drawLine(Color.White.copy(0.15f), project(-halfW, 0f, z, scale, center, rotY, rotX), project(halfW, 0f, z, scale, center, rotY, rotX), 1.dp.toPx())
     }
     for (i in -(width / (2 * step)).toInt()..(width / (2 * step)).toInt()) {
         val x = i * step
-        drawLine(Color.White.copy(0.2f), project(x, 0f, -halfD, scale, center, rotY, rotX), project(x, 0f, halfD, scale, center, rotY, rotX), 1.dp.toPx())
+        drawLine(Color.White.copy(0.15f), project(x, 0f, -halfD, scale, center, rotY, rotX), project(x, 0f, halfD, scale, center, rotY, rotX), 1.dp.toPx())
     }
 }
 
 private fun DrawScope.drawAxes(center: Offset, rotY: Float, rotX: Float, scale: Float, width: Float, depth: Float) {
     val pO = project(0f, 0f, 0f, scale, center, rotY, rotX)
-    drawLine(Color.Red, pO, project(50f, 0f, 0f, scale, center, rotY, rotX), 2.dp.toPx())
-    drawLine(Color.Green, pO, project(0f, 50f, 0f, scale, center, rotY, rotX), 2.dp.toPx())
-    drawLine(Color.Blue, pO, project(0f, 0f, 50f, scale, center, rotY, rotX), 2.dp.toPx())
-}
-
-private fun formatTime(seconds: Long): String {
-    val h = seconds / 3600; val m = (seconds % 3600) / 60; val s = seconds % 60
-    return if (h > 0) String.format("%02d:%02d:%02d", h, m, s) else String.format("%02d:%02d", m, s)
+    drawLine(Color(0xFFEF5350), pO, project(40f, 0f, 0f, scale, center, rotY, rotX), 2.dp.toPx())
+    drawLine(Color(0xFF66BB6A), pO, project(0f, 40f, 0f, scale, center, rotY, rotX), 2.dp.toPx())
+    drawLine(Color(0xFF42A5F5), pO, project(0f, 0f, 40f, scale, center, rotY, rotX), 2.dp.toPx())
 }

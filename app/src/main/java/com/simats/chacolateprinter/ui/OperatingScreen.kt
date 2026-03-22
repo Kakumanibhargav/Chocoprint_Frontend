@@ -1,6 +1,9 @@
 package com.simats.chacolateprinter.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -19,11 +22,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.simats.chacolateprinter.utils.GCodeParser
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.first
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,6 +49,8 @@ fun OperatingScreen(
     val commands = remember(gCodeString) { 
         GCodeParser.parse(gCodeString) 
     }
+
+    val isCompleted = progress >= 1f && !isPrinting
 
     val gradientBrush = Brush.verticalGradient(
         colors = listOf(
@@ -79,149 +83,214 @@ fun OperatingScreen(
         containerColor = Color.Transparent,
         modifier = Modifier.background(brush = gradientBrush)
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Progress Section
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(180.dp)) {
-                CircularProgressIndicator(
-                    progress = { animatedProgress },
-                    modifier = Modifier.fillMaxSize(),
-                    color = Color(0xFFFFB300),
-                    strokeWidth = 12.dp,
-                    trackColor = Color.White.copy(alpha = 0.1f),
-                    strokeCap = StrokeCap.Round
-                )
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "${(animatedProgress * 100).toInt()}%",
-                        color = Color.White,
-                        fontSize = 36.sp,
-                        fontWeight = FontWeight.Black
-                    )
-                    Text(
-                        text = "Complete",
-                        color = Color.Gray,
-                        fontSize = 14.sp
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Current Command Info
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.05f)),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Current Line:", color = Color.Gray, fontSize = 14.sp)
-                        Text("${lastSentIndex + 1} / ${commands.size}", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Command:", color = Color.Gray, fontSize = 14.sp)
-                    val currentCmd = if (lastSentIndex >= 0 && lastSentIndex < commands.size) commands[lastSentIndex].originalLine else "None"
-                    Text(
-                        text = currentCmd,
-                        color = Color(0xFFFFB300),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Control Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (!isPrinting || progress >= 1f) {
-                    // Start Button
-                    ControlIconButton(
-                        icon = Icons.Default.PlayArrow,
-                        label = "START",
-                        color = Color(0xFF4CAF50),
-                        onClick = onStartClick,
-                        enabled = isConnected
-                    )
-                } else {
-                    // Pause/Resume Button
-                    ControlIconButton(
-                        icon = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                        label = if (isPaused) "RESUME" else "PAUSE",
-                        color = Color(0xFFFFB300),
-                        onClick = if (isPaused) onResumeClick else onPauseClick,
-                        enabled = isConnected
-                    )
-
-                    // Stop Button
-                    ControlIconButton(
-                        icon = Icons.Default.Stop,
-                        label = "STOP",
-                        color = Color(0xFFD32F2F),
-                        onClick = onStopClick,
-                        enabled = isConnected
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Console Log
-            Text(
-                "CONSOLE LOG",
-                color = Color.Gray,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.align(Alignment.Start).padding(bottom = 8.dp)
-            )
-            
-            Surface(
+        Box(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(bottom = 16.dp),
-                color = Color.Black.copy(alpha = 0.5f),
-                shape = RoundedCornerShape(12.dp),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                val scrollState = rememberScrollState()
-                LaunchedEffect(consoleLogs.size) {
-                    scrollState.animateScrollTo(scrollState.maxValue)
-                }
-                
-                Column(
-                    modifier = Modifier
-                        .padding(12.dp)
-                        .verticalScroll(scrollState)
-                ) {
-                    consoleLogs.forEach { log ->
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Progress Section
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(180.dp)) {
+                    CircularProgressIndicator(
+                        progress = { animatedProgress },
+                        modifier = Modifier.fillMaxSize(),
+                        color = if (isCompleted) Color(0xFF4CAF50) else Color(0xFFFFB300),
+                        strokeWidth = 12.dp,
+                        trackColor = Color.White.copy(alpha = 0.1f),
+                        strokeCap = StrokeCap.Round
+                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = log,
-                            color = if (log.startsWith(">>")) Color(0xFF81C784) else if (log.startsWith("<<")) Color(0xFF64B5F6) else Color.White,
-                            fontSize = 12.sp,
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                            modifier = Modifier.padding(bottom = 4.dp)
+                            text = "${(animatedProgress * 100).toInt()}%",
+                            color = Color.White,
+                            fontSize = 36.sp,
+                            fontWeight = FontWeight.Black
+                        )
+                        Text(
+                            text = if (isCompleted) "Finished" else "Complete",
+                            color = if (isCompleted) Color(0xFF81C784) else Color(0.5f, 0.5f, 0.5f, 1.0f),
+                            fontSize = 14.sp
                         )
                     }
-                    if (consoleLogs.isEmpty()) {
-                        Text("Terminal idle...", color = Color.DarkGray, fontSize = 12.sp)
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Current Command Info
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.05f)),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Current Line:", color = Color.Gray, fontSize = 14.sp)
+                            Text("${lastSentIndex} / ${commands.size}", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Status:", color = Color.Gray, fontSize = 14.sp)
+                        val statusText = when {
+                            isCompleted -> "Printing Successfully Completed"
+                            isPrinting && isPaused -> "Printing Paused"
+                            isPrinting -> "Printing in Progress..."
+                            else -> "Ready to Start"
+                        }
+                        Text(
+                            text = statusText,
+                            color = if (isCompleted) Color(0xFF81C784) else Color(0xFFFFB300),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Control Buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (isCompleted) {
+                        // Home Button
+                        Button(
+                            onClick = onStopClick,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth().height(56.dp)
+                        ) {
+                            Icon(Icons.Default.Home, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("RETURN TO HOME", fontWeight = FontWeight.Bold)
+                        }
+                    } else if (!isPrinting) {
+                        // Start Button
+                        ControlIconButton(
+                            icon = Icons.Default.PlayArrow,
+                            label = "START",
+                            color = Color(0xFF4CAF50),
+                            onClick = onStartClick,
+                            enabled = isConnected
+                        )
+                    } else {
+                        // Pause/Resume Button
+                        ControlIconButton(
+                            icon = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
+                            label = if (isPaused) "RESUME" else "PAUSE",
+                            color = Color(0xFFFFB300),
+                            onClick = if (isPaused) onResumeClick else onPauseClick,
+                            enabled = isConnected
+                        )
+
+                        // Stop Button
+                        ControlIconButton(
+                            icon = Icons.Default.Stop,
+                            label = "STOP",
+                            color = Color(0xFFD32F2F),
+                            onClick = onStopClick,
+                            enabled = isConnected
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Console Log
+                Text(
+                    "CONSOLE LOG",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.Start).padding(bottom = 8.dp)
+                )
+                
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(bottom = 16.dp),
+                    color = Color.Black.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                ) {
+                    val scrollState = rememberScrollState()
+                    LaunchedEffect(consoleLogs.size) {
+                        scrollState.animateScrollTo(scrollState.maxValue)
+                    }
+                    
+                    Column(
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .verticalScroll(scrollState)
+                    ) {
+                        consoleLogs.forEach { log ->
+                            Text(
+                                text = log,
+                                color = if (log.contains("Complete")) Color(0xFF81C784) else if (log.startsWith(">>")) Color(0xFF81C784).copy(alpha = 0.7f) else if (log.startsWith("<<")) Color(0xFF64B5F6) else Color.White,
+                                fontSize = 12.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                        }
+                        if (consoleLogs.isEmpty()) {
+                            Text("Terminal idle...", color = Color.DarkGray, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+
+            // Completion Overlay
+            AnimatedVisibility(
+                visible = isCompleted,
+                enter = fadeIn() + scaleIn(),
+                modifier = Modifier.align(Alignment.Center)
+            ) {
+                Card(
+                    modifier = Modifier.padding(32.dp),
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1B1B1B)),
+                    border = BorderStroke(2.dp, Color(0xFF4CAF50))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = Color(0xFF4CAF50),
+                            modifier = Modifier.size(80.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            "SUCCESS!",
+                            color = Color.White,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Your chocolate print has been successfully completed.",
+                            color = Color.Gray,
+                            textAlign = TextAlign.Center,
+                            fontSize = 14.sp
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        Button(
+                            onClick = onStopClick,
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("GO TO HOME", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

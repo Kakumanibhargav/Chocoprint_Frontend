@@ -51,11 +51,12 @@ fun SignInScreen(
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
         ) {
-            Spacer(modifier = Modifier.height(60.dp))
-            
-            RotatingCube(modifier = Modifier.size(80.dp))
-            
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Rotating Cube (Central Animation)
+            RotatingCube(modifier = Modifier.size(70.dp))
+
+            Spacer(modifier = Modifier.height(32.dp))
 
             Text(
                 text = "ChocoPrint 3D",
@@ -189,7 +190,17 @@ fun SignInScreen(
                 }
             }
             
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Footer Text (Positioned slightly higher)
+            Text(
+                text = "Powered by SIMATS Engineering",
+                color = Color(0xFFA1887F),
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
+            
+            Spacer(modifier = Modifier.height(40.dp))
         }
     }
 }

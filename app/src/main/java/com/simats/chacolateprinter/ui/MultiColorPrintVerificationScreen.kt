@@ -147,8 +147,8 @@ fun MultiColorPrintVerificationScreen(
                             // Calculate incrementing values for each process to match MultiColorConfigScreen
                             val currentX = baseX + (index * incrementXY)
                             val currentY = baseY + (index * incrementXY)
-                            // Corrected Z logic: baseZ * (index + 1) to match MultiColorConfigScreen and GCodeGenerator
-                            val currentZ = baseZ * (index + 1)
+                            // Process 1 (index 0) is at Z=0, subsequent processes increment by baseZ
+                            val currentZ = baseZ * index
 
                             ProcessTimelineItem(
                                 index + 1,

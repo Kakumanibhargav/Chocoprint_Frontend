@@ -131,7 +131,7 @@ fun MultiColorConfigScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 AxisInput("Y-Axis (Height mm)", yAxisHeight, Color.Green) { yAxisHeight = it }
                 Spacer(modifier = Modifier.height(8.dp))
-                AxisInput("Z-Axis (Extrusion Height mm)", zAxisHeight, Color.Blue) { zAxisHeight = it }
+                AxisInput("Z-Axis (Step mm)", zAxisHeight, Color.Blue) { zAxisHeight = it }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -204,9 +204,9 @@ fun MultiColorConfigScreen(
                         .padding(12.dp)
                 ) {
                     Column {
-                        InfoRow("Base dimensions: X$xAxisWidth Y$yAxisHeight Z$zAxisHeight")
+                        InfoRow("Base dimensions: X$xAxisWidth Y$yAxisHeight")
                         InfoRow("Increment: +$xyIncrement mm per process (X & Y)")
-                        InfoRow("Z-height Increment: +${zAxisHeight}mm per process")
+                        InfoRow("Z-height Step: $zAxisHeight mm")
                         val rotation = if (num > 0) 360f / num else 0f
                         InfoRow("Motor rotation: ${String.format("%.1f", rotation)}° per color")
                         InfoRow("Total processes: $num")
@@ -257,15 +257,6 @@ fun MultiColorConfigScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
                         )
-
-                        // Numbers labeled on segments
-                        val sweepAngle = 360f / num
-                        for (i in 0 until num) {
-                            val angle = (i * sweepAngle + sweepAngle / 2 - 90f) * (Math.PI / 180f)
-                            val radius = 70.dp.value * 2 // approximation of canvas units
-                            // Since we are in a Box, we can't easily position children by canvas coordinates
-                            // but we can use Canvas's drawContext or just drawing text on canvas
-                        }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
@@ -285,7 +276,8 @@ fun MultiColorConfigScreen(
                         val color = displayColors[(i-1) % displayColors.size]
                         val currentX = (xAxisWidth.toIntOrNull() ?: 10) + (i-1) * (xyIncrement.toIntOrNull() ?: 0)
                         val currentY = (yAxisHeight.toIntOrNull() ?: 10) + (i-1) * (xyIncrement.toIntOrNull() ?: 0)
-                        val currentZ = (zAxisHeight.toIntOrNull() ?: 5) * i
+                        // Process 1 is Z=0, next processes increment by zAxisHeight
+                        val currentZ = (zAxisHeight.toIntOrNull() ?: 5) * (i-1)
                         ProcessRow(i, color, "X$currentX Y$currentY Z$currentZ")
                     }
                 }

@@ -29,7 +29,6 @@ object GCodeGenerator {
         sb.append('.')
         val fPart = ((v - iPart) * 100 + 0.5f).toInt()
         if (fPart >= 100) {
-            // Very rare rounding case
             sb.setLength(sb.length - (iPart.toString().length + 1))
             sb.append(iPart + 1)
             sb.append(".00")
@@ -61,19 +60,14 @@ object GCodeGenerator {
     ): GCodeGenerationResult {
         val layerH = (params.layerHeight.toFloatOrNull() ?: 0.6f).coerceAtLeast(0.1f)
         val printSpeed = (params.printSpeed.toFloatOrNull() ?: 20f)
-        val travelSpeed = (params.travelSpeed.toFloatOrNull() ?: 60f)
         val zMax = params.zMax.toFloatOrNull() ?: 150f
         val xMax = params.xMax.toFloatOrNull() ?: 200f
         val yMax = params.yMax.toFloatOrNull() ?: 200f
         
         val layers = params.numLayers.toIntOrNull() ?: (zMax / layerH).toInt().coerceIn(1, 500)
         
-        // Pre-allocate StringBuilder capacity to avoid repeated resizing
-        val layerBodyBuilder = StringBuilder(paths.size * 50 + paths.sumOf { it.size } * 40)
-        
         var minX = Float.MAX_VALUE; var maxX = Float.MIN_VALUE
         var minY = Float.MAX_VALUE; var maxY = Float.MIN_VALUE
-        
         var hasPoints = false
         for (path in paths) {
             for (p in path) {
@@ -82,75 +76,72 @@ object GCodeGenerator {
                 if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y
             }
         }
-        
         if (!hasPoints) return GCodeGenerationResult("", 0)
         
         val width = maxX - minX; val height = maxY - minY
-        
         val targetW = params.shapeWidth.toFloatOrNull() ?: (xMax - 40f)
         val targetH = params.shapeHeight.toFloatOrNull() ?: (yMax - 40f)
         val scale = min(if (width > 0) targetW / width else 1f, if (height > 0) targetH / height else 1f)
-        
-        val printF = printSpeed * 60; val travelF = travelSpeed * 60
-        
+        val printF = printSpeed * 60
         val sourceCenterX = (minX + maxX) / 2f
         val sourceCenterY = (minY + maxY) / 2f
-        
-        paths.forEach { path ->
-            if (path.isEmpty()) return@forEach
-            val startP = path[0]
-            val sx = (startP.x - sourceCenterX) * scale
-            val sy = (startP.y - sourceCenterY) * scale
-            
-            layerBodyBuilder.append("G0 X")
-            fastFmt2(sx, layerBodyBuilder)
-            layerBodyBuilder.append(" Y")
-            fastFmt2(sy, layerBodyBuilder)
-            layerBodyBuilder.append("\n")
-            
-            layerBodyBuilder.append("M3 S").append(params.servoAngle).append("; Start drawing\n")
-            layerBodyBuilder.append("G4 P200\n")
 
-            for (i in 1 until path.size) {
-                val p = path[i]; val prevP = path[i-1]
-                val x = (p.x - sourceCenterX) * scale
-                val y = (p.y - sourceCenterY) * scale
-                
-                // Adaptive skip: skip movements that are too small to matter but keep accuracy for detail
-                if (kotlin.math.abs(x - (prevP.x - sourceCenterX) * scale) < 0.02f && 
-                    kotlin.math.abs(y - (prevP.y - sourceCenterY) * scale) < 0.02f) continue
-                
-                layerBodyBuilder.append("G1 X")
-                fastFmt2(x, layerBodyBuilder)
-                layerBodyBuilder.append(" Y")
-                fastFmt2(y, layerBodyBuilder)
-                layerBodyBuilder.append(" F")
-                fastFmt0(printF, layerBodyBuilder)
-                layerBodyBuilder.append("\n")
-            }
-            
-            layerBodyBuilder.append("M5\n")
-        }
-        
-        val layerBody = layerBodyBuilder.toString()
-        val sb = StringBuilder(layerBody.length * layers + 2000)
-        sb.append("G21 ; Set units to mm\nG90 ; Absolute positioning\nG28 ; Home\nM5\nG1 F")
-        fastFmt0(travelF, sb)
-        sb.append("\n")
+        val sb = StringBuilder()
+        sb.append("G21 ; millimeters\n")
+        sb.append("G90 ; absolute positioning\n")
+        sb.append("G92 X0 Y0 Z0 A0 ; set current position as zero\n\n")
 
+        var cumulativeA = 0f
+        
         for (layer in 1..layers) {
-            val z = layer * layerH
-            sb.append("; Layer ").append(layer).append("\n")
-            sb.append("G0 Z")
-            fastFmt2(z, sb)
+            val z = (layer - 1) * layerH
+            sb.append("; ---------- Layer ").append(layer).append(" ----------\n")
+            
+            paths.forEach { path ->
+                if (path.isEmpty()) return@forEach
+                
+                // Move to start of path
+                val startP = path[0]
+                val sx = (startP.x - sourceCenterX) * scale
+                val sy = (startP.y - sourceCenterY) * scale
+                sb.append("G0 X")
+                fastFmt2(sx, sb)
+                sb.append(" Y")
+                fastFmt2(sy, sb)
+                sb.append(" Z")
+                fastFmt2(z, sb)
+                sb.append("\n")
+
+                for (i in 1 until path.size) {
+                    val p = path[i]; val prevP = path[i-1]
+                    val x = (p.x - sourceCenterX) * scale
+                    val y = (p.y - sourceCenterY) * scale
+                    val px = (prevP.x - sourceCenterX) * scale
+                    val py = (prevP.y - sourceCenterY) * scale
+                    
+                    val dist = kotlin.math.sqrt((x - px).pow(2) + (y - py).pow(2))
+                    if (dist < 0.01f) continue
+                    
+                    // Simple A-axis increment as per sample: dist * constant (e.g. 1.0)
+                    cumulativeA += dist * 1.0f 
+                    
+                    sb.append("G1 X")
+                    fastFmt2(x, sb)
+                    sb.append(" Y")
+                    fastFmt2(y, sb)
+                    sb.append(" Z")
+                    fastFmt2(z, sb)
+                    sb.append(" A")
+                    fastFmt2(cumulativeA, sb)
+                    sb.append(" F")
+                    fastFmt0(printF, sb)
+                    sb.append("\n")
+                }
+            }
             sb.append("\n")
-            sb.append(layerBody)
         }
 
-        sb.append("G0 Z")
-        fastFmt2(zMax, sb)
-        sb.append("\nG28 X0 Y0\nG0 Z0\nM84\n")
-        
+        sb.append("M30\n")
         return GCodeGenerationResult(sb.toString(), layers)
     }
 
@@ -171,7 +162,7 @@ object GCodeGenerator {
         sb.append("G21 ; Set units to mm\n")
         sb.append("G90 ; Absolute positioning\n")
         sb.append("G28 ; Home all axes\n")
-        sb.append("M5 ; Tool OFF\n\n")
+        sb.append("M3 S10 ; Pen Up\n\n")
 
         var totalLayers = 0
         for (i in 0 until numColors) {
@@ -191,7 +182,6 @@ object GCodeGenerator {
             
             sb.append("; Process ").append(processNum).append("\n")
             sb.append("; Layer 1\n")
-            sb.append("M117 Color ").append(processNum).append("\n")
             sb.append("G0 Z")
             fastFmt2(z, sb)
             sb.append("\n")
@@ -222,8 +212,7 @@ object GCodeGenerator {
                 fastFmt2(sy, sb)
                 sb.append("\n")
                 
-                sb.append("M3 S").append(params.servoAngle).append("; Start drawing\n")
-                sb.append("G4 P200\n")
+                sb.append("M3 S540; Pen Down\n")
 
                 for (j in 1 until path.size) {
                     val p = path[j]
@@ -237,14 +226,12 @@ object GCodeGenerator {
                     fastFmt0(printF, sb)
                     sb.append("\n")
                 }
-                sb.append("M5\n")
+                sb.append("M3 S10; Pen Up\n")
             }
             sb.append("\n")
         }
 
-        sb.append("G0 Z")
-        fastFmt2(params.zMax.toFloatOrNull() ?: 150f, sb)
-        sb.append("\nG28 X0 Y0\nG0 Z0\nM5\n; ===== End =====\n")
+        sb.append("G28 X0 Y0\nG0 Z0\nM3 S10; Pen Up\n; ===== End =====\n")
 
         return GCodeGenerationResult(sb.toString(), totalLayers)
     }
@@ -277,6 +264,89 @@ object GCodeGenerator {
                     val angle = Math.toRadians(i.toDouble())
                     borderPath.add(Point(0.5f + 0.4f * cos(angle).toFloat(), 0.5f + 0.4f * sin(angle).toFloat()))
                 }
+            }
+            "Parallelogram" -> {
+                borderPath.add(Point(0.2f, 0.8f))
+                borderPath.add(Point(0.4f, 0.2f))
+                borderPath.add(Point(0.8f, 0.2f))
+                borderPath.add(Point(0.6f, 0.8f))
+                borderPath.add(Point(0.2f, 0.8f))
+            }
+            "Triangle" -> {
+                borderPath.add(Point(0.5f, 0.2f))
+                borderPath.add(Point(0.8f, 0.8f))
+                borderPath.add(Point(0.2f, 0.8f))
+                borderPath.add(Point(0.5f, 0.2f))
+            }
+            "Hexagon" -> {
+                for (i in 0 until 6) {
+                    val angle = Math.toRadians(60.0 * i)
+                    borderPath.add(Point(0.5f + 0.4f * cos(angle).toFloat(), 0.5f + 0.4f * sin(angle).toFloat()))
+                }
+                borderPath.add(borderPath.first())
+            }
+            "Pentagon" -> {
+                for (i in 0 until 5) {
+                    val angle = Math.toRadians(72.0 * i - 90.0)
+                    borderPath.add(Point(0.5f + 0.4f * cos(angle).toFloat(), 0.5f + 0.4f * sin(angle).toFloat()))
+                }
+                borderPath.add(borderPath.first())
+            }
+            "Diamond" -> {
+                borderPath.add(Point(0.5f, 0.1f))
+                borderPath.add(Point(0.9f, 0.5f))
+                borderPath.add(Point(0.5f, 0.9f))
+                borderPath.add(Point(0.1f, 0.5f))
+                borderPath.add(Point(0.5f, 0.1f))
+            }
+            "Moon" -> {
+                for (i in -90..90 step 10) {
+                    val angle = Math.toRadians(i.toDouble())
+                    borderPath.add(Point(0.5f + 0.4f * cos(angle).toFloat(), 0.5f + 0.4f * sin(angle).toFloat()))
+                }
+                for (i in 90 downTo -90 step 10) {
+                    val angle = Math.toRadians(i.toDouble())
+                    borderPath.add(Point(0.65f + 0.3f * cos(angle).toFloat(), 0.5f + 0.4f * sin(angle).toFloat()))
+                }
+                borderPath.add(borderPath.first())
+            }
+            "Cat" -> {
+                // More realistic Cat Silhouette
+                borderPath.add(Point(0.35f, 0.85f)); borderPath.add(Point(0.65f, 0.85f)) // Base
+                borderPath.add(Point(0.75f, 0.70f)); borderPath.add(Point(0.70f, 0.45f)) // Right Body
+                borderPath.add(Point(0.80f, 0.25f)); borderPath.add(Point(0.65f, 0.35f)) // Right Ear
+                borderPath.add(Point(0.50f, 0.40f)); borderPath.add(Point(0.35f, 0.35f)) // Head top & Left Ear
+                borderPath.add(Point(0.20f, 0.25f)); borderPath.add(Point(0.30f, 0.45f)) // Left Ear finish
+                borderPath.add(Point(0.25f, 0.70f)); borderPath.add(Point(0.35f, 0.85f)) // Left Body finish
+            }
+            "Bird" -> {
+                // More realistic Bird Silhouette (flying)
+                borderPath.add(Point(0.10f, 0.40f)); borderPath.add(Point(0.30f, 0.35f)) // Left wing
+                borderPath.add(Point(0.45f, 0.45f)); borderPath.add(Point(0.55f, 0.40f)) // Neck & Head
+                borderPath.add(Point(0.60f, 0.35f)); borderPath.add(Point(0.55f, 0.45f)) // Beak
+                borderPath.add(Point(0.70f, 0.35f)); borderPath.add(Point(0.90f, 0.40f)) // Right wing
+                borderPath.add(Point(0.70f, 0.55f)); borderPath.add(Point(0.50f, 0.65f)) // Bottom wing join
+                borderPath.add(Point(0.30f, 0.55f)); borderPath.add(Point(0.10f, 0.40f)) // Close Left
+            }
+            "Butterfly" -> {
+                // More realistic Butterfly Silhouette
+                borderPath.add(Point(0.50f, 0.40f)); borderPath.add(Point(0.50f, 0.70f)) // Body center
+                // Right side
+                borderPath.add(Point(0.65f, 0.85f)); borderPath.add(Point(0.85f, 0.65f))
+                borderPath.add(Point(0.75f, 0.55f)); borderPath.add(Point(0.90f, 0.35f))
+                borderPath.add(Point(0.70f, 0.15f)); borderPath.add(Point(0.50f, 0.40f))
+                // Left side
+                borderPath.add(Point(0.30f, 0.15f)); borderPath.add(Point(0.10f, 0.35f))
+                borderPath.add(Point(0.25f, 0.55f)); borderPath.add(Point(0.15f, 0.65f))
+                borderPath.add(Point(0.35f, 0.85f)); borderPath.add(Point(0.50f, 0.70f))
+            }
+            "Fish" -> {
+                // More realistic Fish Silhouette
+                borderPath.add(Point(0.10f, 0.35f)); borderPath.add(Point(0.10f, 0.65f)) // Tail
+                borderPath.add(Point(0.30f, 0.50f)); borderPath.add(Point(0.50f, 0.30f)) // Tail to body
+                borderPath.add(Point(0.80f, 0.35f)); borderPath.add(Point(0.95f, 0.50f)) // Top head
+                borderPath.add(Point(0.80f, 0.65f)); borderPath.add(Point(0.50f, 0.70f)) // Bottom body
+                borderPath.add(Point(0.30f, 0.50f)); borderPath.add(Point(0.10f, 0.35f)) // Back to tail
             }
             else -> {
                 borderPath.add(Point(0.1f, 0.1f)); borderPath.add(Point(0.9f, 0.1f))

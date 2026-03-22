@@ -24,28 +24,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Circle
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Square
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Upload
-import androidx.compose.material.icons.outlined.Circle
-import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.Square
-import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,28 +45,24 @@ import android.net.Uri
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.simats.chacolateprinter.model.DesignItem
-
-// ... (Existing Imports)
+import kotlin.math.cos
+import kotlin.math.sin
 
 @Composable
 fun SelectDesignScreen(onBackClick: () -> Unit, onDesignSelected: (String, Uri?) -> Unit) {
-    // Gradient Background
     val gradientBrush = Brush.verticalGradient(
         colors = listOf(
-            Color(0xFF3E2723), // Dark Chocolate
-            Color(0xFF1B0000)  // Almost Black
+            Color(0xFF3E2723), 
+            Color(0xFF1B0000)
         )
     )
 
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Sample, 1 = Upload Custom
+    var selectedTab by remember { mutableIntStateOf(0) } 
     
-    // File Picker Launcher
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
-        // When file is selected
         uri?.let {
-            // Pass the URI to the callback
             onDesignSelected("Custom Design", it)
         }
     }
@@ -95,8 +73,6 @@ fun SelectDesignScreen(onBackClick: () -> Unit, onDesignSelected: (String, Uri?)
             .background(brush = gradientBrush)
             .padding(16.dp)
     ) {
-        // ... (Top Bar and Tab Toggle code remains same) ...
-        // Top Bar
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
@@ -128,21 +104,18 @@ fun SelectDesignScreen(onBackClick: () -> Unit, onDesignSelected: (String, Uri?)
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Tab Toggle
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(64.dp)
                 .border(1.dp, Color(0xFF5D4037), RoundedCornerShape(16.dp))
                 .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF2E1F1C)), // Darker background for tab container
+                .background(Color(0xFF2E1F1C)),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Selected Tab State helpers
             val isSampleSelected = selectedTab == 0
             val isCustomSelected = selectedTab == 1
 
-            // Sample Tab
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -164,7 +137,6 @@ fun SelectDesignScreen(onBackClick: () -> Unit, onDesignSelected: (String, Uri?)
                 )
             }
             
-            // Custom Tab
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -188,7 +160,6 @@ fun SelectDesignScreen(onBackClick: () -> Unit, onDesignSelected: (String, Uri?)
         Spacer(modifier = Modifier.height(24.dp))
 
         if (selectedTab == 0) {
-            // Sample Designs Grid
             Text(
                 text = "Choose a Pre-made Design",
                 color = Color.White,
@@ -204,7 +175,15 @@ fun SelectDesignScreen(onBackClick: () -> Unit, onDesignSelected: (String, Uri?)
                 DesignItem("Circle", Icons.Default.Circle, Icons.Outlined.Circle),
                 DesignItem("Square", Icons.Default.Square, Icons.Outlined.Square),
                 DesignItem("Parallelogram", customShape = true),
-                DesignItem("Triangle", customShape = true)
+                DesignItem("Triangle", customShape = true),
+                DesignItem("Hexagon", customShape = true),
+                DesignItem("Pentagon", customShape = true),
+                DesignItem("Diamond", customShape = true),
+                DesignItem("Moon", customShape = true),
+                DesignItem("Cat", customShape = true),
+                DesignItem("Bird", customShape = true),
+                DesignItem("Butterfly", customShape = true),
+                DesignItem("Fish", customShape = true)
             )
             
             var selectedDesign by remember { mutableStateOf<String?>(null) }
@@ -212,7 +191,8 @@ fun SelectDesignScreen(onBackClick: () -> Unit, onDesignSelected: (String, Uri?)
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.weight(1f)
             ) {
                 items(designs) { design ->
                     DesignCard(
@@ -226,9 +206,7 @@ fun SelectDesignScreen(onBackClick: () -> Unit, onDesignSelected: (String, Uri?)
                 }
             }
         } else {
-            // Upload Custom View
-            // Launch picker for all file types (filtering can be stricter if needed, e.g. "image/*")
-            UploadCustomView(onBrowseClick = { launcher.launch("*/*") })
+            UploadCustomView(onBrowseClick = { launcher.launch("image/*") })
         }
     }
 }
@@ -252,7 +230,7 @@ fun UploadCustomView(onBrowseClick: () -> Unit) {
                 )
             }
             .background(Color(0xFF2E1F1C).copy(alpha = 0.5f), RoundedCornerShape(16.dp))
-            .padding(1.dp), // Avoid clipping border
+            .padding(1.dp), 
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -304,7 +282,7 @@ fun UploadCustomView(onBrowseClick: () -> Unit) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 FileTypeChip("PNG")
                 FileTypeChip("SVG")
-                FileTypeChip("STL")
+                FileTypeChip("JPG")
             }
         }
     }
@@ -335,7 +313,7 @@ fun DesignCard(design: DesignItem, isSelected: Boolean, onClick: () -> Unit) {
         border = androidx.compose.foundation.BorderStroke(if (isSelected) 2.dp else 1.dp, borderColor),
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier
-            .height(220.dp) // Taller to fit all elements
+            .height(220.dp) 
             .clickable(onClick = onClick)
     ) {
         Column(
@@ -343,7 +321,6 @@ fun DesignCard(design: DesignItem, isSelected: Boolean, onClick: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Preview Box
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -365,7 +342,6 @@ fun DesignCard(design: DesignItem, isSelected: Boolean, onClick: () -> Unit) {
             
             Spacer(modifier = Modifier.height(12.dp))
             
-            // Icon + Label
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 if (design.customShape) {
                      CustomShape(design.name, isFilled = false, size = 24.dp)
@@ -398,16 +374,112 @@ fun CustomShape(name: String, isFilled: Boolean, size: androidx.compose.ui.unit.
 
         when (name) {
             "Parallelogram" -> {
-                path.moveTo(0f, h)
-                path.lineTo(w / 4, 0f)
-                path.lineTo(w, 0f)
-                path.lineTo(w * 3/4, h)
+                path.moveTo(w * 0.2f, h * 0.8f)
+                path.lineTo(w * 0.4f, h * 0.2f)
+                path.lineTo(w * 0.8f, h * 0.2f)
+                path.lineTo(w * 0.6f, h * 0.8f)
                 path.close()
             }
             "Triangle" -> {
-                path.moveTo(w / 2, 0f)
-                path.lineTo(w, h)
-                path.lineTo(0f, h)
+                path.moveTo(w / 2, h * 0.2f)
+                path.lineTo(w * 0.8f, h * 0.8f)
+                path.lineTo(w * 0.2f, h * 0.8f)
+                path.close()
+            }
+            "Hexagon" -> {
+                for (i in 0 until 6) {
+                    val angle = Math.toRadians(60.0 * i)
+                    val x = (w/2 + (w/2.5 * cos(angle))).toFloat()
+                    val y = (h/2 + (h/2.5 * sin(angle))).toFloat()
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                path.close()
+            }
+            "Pentagon" -> {
+                for (i in 0 until 5) {
+                    val angle = Math.toRadians(72.0 * i - 90.0)
+                    val x = (w/2 + (w/2.5 * cos(angle))).toFloat()
+                    val y = (h/2 + (h/2.5 * sin(angle))).toFloat()
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                path.close()
+            }
+            "Diamond" -> {
+                path.moveTo(w/2, h * 0.1f)
+                path.lineTo(w * 0.9f, h/2)
+                path.lineTo(w/2, h * 0.9f)
+                path.lineTo(w * 0.1f, h/2)
+                path.close()
+            }
+            "Moon" -> {
+                for (i in -90..90 step 5) {
+                    val angle = Math.toRadians(i.toDouble())
+                    val x = (w/2 + (w/2.5 * cos(angle))).toFloat()
+                    val y = (h/2 + (h/2.5 * sin(angle))).toFloat()
+                    if (i == -90) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                for (i in 90 downTo -90 step 5) {
+                    val angle = Math.toRadians(i.toDouble())
+                    val x = (w * 0.65f + (w * 0.3 * cos(angle))).toFloat()
+                    val y = (h/2 + (h/2.5 * sin(angle))).toFloat()
+                    path.lineTo(x, y)
+                }
+                path.close()
+            }
+            "Cat" -> {
+                path.moveTo(w * 0.35f, h * 0.85f)
+                path.lineTo(w * 0.65f, h * 0.85f)
+                path.lineTo(w * 0.75f, h * 0.70f)
+                path.lineTo(w * 0.70f, h * 0.45f)
+                path.lineTo(w * 0.80f, h * 0.25f)
+                path.lineTo(w * 0.65f, h * 0.35f)
+                path.lineTo(w * 0.50f, h * 0.40f)
+                path.lineTo(w * 0.35f, h * 0.35f)
+                path.lineTo(w * 0.20f, h * 0.25f)
+                path.lineTo(w * 0.30f, h * 0.45f)
+                path.lineTo(w * 0.25f, h * 0.70f)
+                path.close()
+            }
+            "Bird" -> {
+                path.moveTo(w * 0.10f, h * 0.40f)
+                path.lineTo(w * 0.30f, h * 0.35f)
+                path.lineTo(w * 0.45f, h * 0.45f)
+                path.lineTo(w * 0.55f, h * 0.40f)
+                path.lineTo(w * 0.60f, h * 0.35f)
+                path.lineTo(w * 0.55f, h * 0.45f)
+                path.lineTo(w * 0.70f, h * 0.35f)
+                path.lineTo(w * 0.90f, h * 0.40f)
+                path.lineTo(w * 0.70f, h * 0.55f)
+                path.lineTo(w * 0.50f, h * 0.65f)
+                path.lineTo(w * 0.30f, h * 0.55f)
+                path.close()
+            }
+            "Butterfly" -> {
+                path.moveTo(w * 0.50f, h * 0.40f)
+                path.lineTo(w * 0.50f, h * 0.70f)
+                path.lineTo(w * 0.65f, h * 0.85f)
+                path.lineTo(w * 0.85f, h * 0.65f)
+                path.lineTo(w * 0.75f, h * 0.55f)
+                path.lineTo(w * 0.90f, h * 0.35f)
+                path.lineTo(w * 0.70f, h * 0.15f)
+                path.lineTo(w * 0.50f, h * 0.40f)
+                path.lineTo(w * 0.30f, h * 0.15f)
+                path.lineTo(w * 0.10f, h * 0.35f)
+                path.lineTo(w * 0.25f, h * 0.55f)
+                path.lineTo(w * 0.15f, h * 0.65f)
+                path.lineTo(w * 0.35f, h * 0.85f)
+                path.close()
+            }
+            "Fish" -> {
+                path.moveTo(w * 0.10f, h * 0.35f)
+                path.lineTo(w * 0.10f, h * 0.65f)
+                path.lineTo(w * 0.30f, h * 0.50f)
+                path.lineTo(w * 0.50f, h * 0.30f)
+                path.lineTo(w * 0.80f, h * 0.35f)
+                path.lineTo(w * 0.95f, h * 0.50f)
+                path.lineTo(w * 0.80f, h * 0.65f)
+                path.lineTo(w * 0.50f, h * 0.70f)
+                path.lineTo(w * 0.30f, h * 0.50f)
                 path.close()
             }
         }
@@ -420,7 +492,7 @@ fun CustomShape(name: String, isFilled: Boolean, size: androidx.compose.ui.unit.
         } else {
              drawPath(
                 path = path,
-                style = Stroke(width = 6f),
+                style = Stroke(width = 4f),
                 color = Color(0xFFFFC107)
             )
         }

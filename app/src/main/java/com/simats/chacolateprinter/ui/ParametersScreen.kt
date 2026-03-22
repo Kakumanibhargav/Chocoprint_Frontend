@@ -51,10 +51,6 @@ fun ParametersScreen(
     var firstLayerHeight by remember { mutableStateOf(initialParameters.firstLayerHeight) }
     var retractionDistance by remember { mutableStateOf(initialParameters.retractionDistance) }
     
-    var xMax by remember { mutableStateOf(initialParameters.xMax) }
-    var yMax by remember { mutableStateOf(initialParameters.yMax) }
-    var zMax by remember { mutableStateOf(initialParameters.zMax) }
-    
     var acceleration by remember { mutableStateOf(initialParameters.acceleration) }
     var jerk by remember { mutableStateOf(initialParameters.jerk) }
     var servoAngle by remember { mutableStateOf(initialParameters.servoAngle) }
@@ -165,21 +161,6 @@ fun ParametersScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Build Plate Settings
-            ParameterCard(title = "Machine Limits") {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(modifier = Modifier.weight(1f)) {
-                        ParameterInput(label = "X Max (mm)", value = xMax, onValueChange = { xMax = it })
-                    }
-                    Box(modifier = Modifier.weight(1f)) {
-                        ParameterInput(label = "Y Max (mm)", value = yMax, onValueChange = { yMax = it })
-                    }
-                }
-                ParameterInput(label = "Z Max (mm)", value = zMax, onValueChange = { zMax = it })
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
             // Advanced Settings
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color(0xFF2E1F1C)),
@@ -250,7 +231,7 @@ fun ParametersScreen(
                         PrinterParameters(
                             layerHeight, printSpeed, travelSpeed, flowRate, infillDensity,
                             wallThickness, nozzleDiameter, firstLayerHeight, retractionDistance,
-                            xMax, yMax, zMax, acceleration, jerk, servoAngle,
+                            initialParameters.xMax, initialParameters.yMax, initialParameters.zMax, acceleration, jerk, servoAngle,
                             shapeWidth, shapeHeight, numLayers
                         )
                     )
